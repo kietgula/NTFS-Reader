@@ -1,4 +1,4 @@
-﻿#include "Header.h"
+#include "Header.h"
 
 void ReadRecord(LPCWSTR drive, long long int clusterOffset, BYTE record[1024])
 {
@@ -125,7 +125,6 @@ Record::Record(BYTE buffer[1024]) //chỉ trích xuất tên file, loại file (
     DWORD currentAttributeID = 0;
     DWORD filenameAttributeID = 0x30;
     bool isFilenameAttribute = false;
-    int count = 0; //giup vong lap ko bi treo
 
     while (!isFilenameAttribute && (int)currentAttributeID <= 0x30) //tim attribute Filename 0x30
     {
@@ -138,7 +137,6 @@ Record::Record(BYTE buffer[1024]) //chỉ trích xuất tên file, loại file (
         {
             memcpy(&currentAttributeLength, &buffer[readPoint + 4], 4);
             readPoint = readPoint + currentAttributeLength;
-            count++;
         }
     }
 
@@ -153,7 +151,6 @@ Record::Record(BYTE buffer[1024]) //chỉ trích xuất tên file, loại file (
 
 
     WORD folderFlag = 3;
-    count = 0;
     DWORD dataAttributeID = 0x80;
     bool isDataAttribute = false;
     while (!isDataAttribute && (int)currentAttributeID <= 0x80) //tim attribute Data 0x80
@@ -168,7 +165,6 @@ Record::Record(BYTE buffer[1024]) //chỉ trích xuất tên file, loại file (
         {
             memcpy(&currentAttributeLength, &buffer[readPoint + 4], 4);
             readPoint = readPoint + currentAttributeLength;
-            count++;
         }
     }
     if (isDataAttribute)
@@ -179,7 +175,7 @@ Record::Record(BYTE buffer[1024]) //chỉ trích xuất tên file, loại file (
         memcpy(&dataOffset, &buffer[readPoint + 10], 2);
         BYTE endMark = 0xFF;
         int dataSizeCount = 0;
-        while (memcmp(&buffer[readPoint + dataOffset + dataSizeCount], &endMark, 1) != 0)
+        while (readPoint + dataOffset + dataSizeCount<1024 && memcmp(&buffer[readPoint + dataOffset + dataSizeCount], &endMark, 1) != 0)
         {
             dataSizeCount++;  
         }
@@ -275,6 +271,16 @@ bool Record::isDirectory()
     return false;
 }
 
+void Record::setRecordOffset(unsigned long long int value)
+{
+    SectorOffset = value;
+}
+
+unsigned long long int Record::getSectorOffset()
+{
+    return SectorOffset;
+}
+
 
 MFT::MFT(LPCWSTR drive, long long int clusterOffset)
     {
@@ -312,9 +318,8 @@ MFT::MFT(LPCWSTR drive, long long int clusterOffset)
         }
 
         Record mft(record); //dua record $mft raw vao trong class record de no xu ly tim kich thuoc mft
-
         long long int numOfRecord = mft.GetFileSize() / 1024;
-        int count = 0;
+
         BYTE SignatureFILE[4];
 
         memcpy(SignatureFILE, record, 4);
@@ -329,6 +334,7 @@ MFT::MFT(LPCWSTR drive, long long int clusterOffset)
             if (memcmp(SignatureFILE, record, 4) == 0)
             {
                 recordList.push_back(createRecord(record));
+                recordList.back()->setRecordOffset(clusterOffset * 8 + i * 2);
             }
         }
     }
@@ -407,7 +413,11 @@ void MFT::PrintPerDirectory(int folderID)
     for (int i = 0; i < recordList.size(); i++)
     {
         if (recordList[i]->getParentID() == folderID)
-            std::cout << buildPath(recordList[i]) <<" "<< recordList[i]->getID() << std::endl;
+            std::cout << buildPath(recordList[i])
+            << " ID:" <<std::dec<< recordList[i]->getID()
+            << " Size: " << recordList[i]->GetFileSize()
+            << " Sector position: "<<recordList[i]->getSectorOffset()
+            << std::endl;
     }
 }
 
@@ -447,9 +457,9 @@ bool checkIfTxtRecord(Record* record)
     WORD t = 0x0074;
     WORD x = 0x0078;
     if (memcmp(&filename[filename.size() - 2], &t, 1) != 0
-        && memcmp(&filename[filename.size() - 4], &x, 1) != 0
-        && memcmp(&filename[filename.size() - 6], &t, 1) != 0
-        && memcmp(&filename[filename.size() - 8], &dot, 1) != 0)
+        || memcmp(&filename[filename.size() - 4], &x, 1) != 0
+        || memcmp(&filename[filename.size() - 6], &t, 1) != 0
+        || memcmp(&filename[filename.size() - 8], &dot, 1) != 0)
         return false;
     return true;
 }
@@ -473,7 +483,6 @@ void Menu(BPB& bpb, MFT& mft)
     else if (choose == 2)
         Directory_Menu(bpb, mft, mft.getMFTRecord()->getParentID());
     else exit(0);
-
 }
 
 void BPB_Menu(BPB& bpb, MFT& mft)
