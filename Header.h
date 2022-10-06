@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
@@ -50,16 +50,16 @@ private:
     WORD ParentSequenceNumber;
     unsigned short FileNameLength;
     char* FileName=NULL;
-
-    int dataSize;
-    char* Data = NULL;
-
     long long int FileSize = 0;
+
+    char* Data;
+    long long int dataSize;
+
+    unsigned long long int SectorOffset=0; //thu tu tren bang entry
 
 public:
     Record(BYTE buffer[1024]);
     ~Record();
-    std::string dataString();
     void Print();
     long long int GetFileSize();
     DWORD getParentID();
@@ -69,6 +69,9 @@ public:
     int getParentSequenceNumber();
     bool isUsed();
     bool isDirectory();
+    std::string dataString();
+    void setRecordOffset(unsigned long long int value);
+    unsigned long long int getSectorOffset();
 };
 
 class MFT
